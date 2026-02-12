@@ -54,14 +54,20 @@ export const generateMusic = async (
   console.log(`[Suno API] Requesting generation to ${baseUrl}...`);
 
   try {
-    // [중요] 브라우저는 보안상 fetch 요청에서 'Cookie' 헤더를 직접 설정하는 것을 차단합니다.
-    // 따라서 'Cookie' 헤더 대신 Body와 Authorization 헤더를 통해 토큰을 전달합니다.
-    const response = await fetch(`${baseUrl}/api/custom_generate`, {
+    // [중요] 브라우저 보안 정책(CORS/Forbidden Headers)으로 인해 'Cookie' 헤더를 직접 보낼 수 없습니다.
+    // 일부 Suno API 서버는 Body나 Query Parameter로 토큰을 받는 것을 지원합니다.
+    
+    // 1. URL에 토큰 추가 (Query Param 방식)
+    const url = new URL(`${baseUrl}/api/custom_generate`);
+    // 일부 서버는 token, 일부는 cookie 파라미터를 사용하므로 둘 다 시도
+    // url.searchParams.append('token', token); 
+    
+    const response = await fetch(url.toString(), {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
-        // 'Cookie': token, // <-- 브라우저가 무시하고 차단하므로 제거 (500 에러 원인)
-        'Authorization': `Bearer ${token}` // 대안 1: Authorization 헤더 사용
+        // 'Cookie': token, // <-- 브라우저 차단됨
+        'Authorization': `Bearer ${token}` // 대안: Authorization 헤더
       },
       body: JSON.stringify({
         prompt: lyrics,
@@ -69,18 +75,26 @@ export const generateMusic = async (
         title: title,
         make_instrumental: false,
         wait_audio: false,
-        cookie: token // 대안 2: Body에 쿠키 포함 (일부 API Wrapper 지원)
+        cookie: token // 대안: Body에 쿠키 포함
       })
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      // 에러 메시지 파싱
       let errorMsg = errorText;
       try {
         const jsonError = JSON.parse(errorText);
         errorMsg = jsonError.error || jsonError.detail || errorText;
       } catch(e) {}
+
+      // 쿠키 헤더 필수 에러가 계속 발생한다면, 유저에게 서버 설정을 안내해야 합니다.
+      if (errorMsg.includes("Cookie header") || response.status === 500) {
+         throw new Error(
+            `서버 인증 오류: API 서버가 브라우저 요청을 거부했습니다. \n` +
+            `해결책: API 서버(Render)의 환경변수(.env)에 'SUNO_COOKIE'를 직접 설정해야 합니다. \n` +
+            `(브라우저는 보안상 쿠키 헤더를 전송할 수 없습니다)`
+         );
+      }
 
       throw new Error(`API Error (${response.status}): ${errorMsg}`);
     }
@@ -105,8 +119,12 @@ export const checkGenerationStatus = async (taskId: string): Promise<SunoGenerat
   const { baseUrl, token } = getSunoConfig();
 
   try {
-    // GET 요청은 Body를 가질 수 없으므로, Authorization 헤더에 의존합니다.
-    const response = await fetch(`${baseUrl}/api/get?ids=${taskId}`, {
+    const url = new URL(`${baseUrl}/api/get`);
+    url.searchParams.append('ids', taskId);
+    // 상태 확인시에도 토큰 전달 시도
+    // url.searchParams.append('token', token);
+
+    const response = await fetch(url.toString(), {
       method: 'GET',
       headers: { 
         'Content-Type': 'application/json',
@@ -115,7 +133,6 @@ export const checkGenerationStatus = async (taskId: string): Promise<SunoGenerat
     });
 
     if (!response.ok) {
-        // 401/403 등 권한 에러가 발생하면 쿠키 전달 문제일 수 있음
         const errorText = await response.text();
         throw new Error(`Status Check Error (${response.status}): ${errorText}`);
     }
