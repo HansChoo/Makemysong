@@ -1,10 +1,6 @@
 {
   "rewrites": [
     {
-      "source": "/suno-proxy/:match*",
-      "destination": "https://suno-api-ejfv.onrender.com/:match*"
-    },
-    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
