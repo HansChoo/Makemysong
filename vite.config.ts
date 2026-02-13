@@ -8,8 +8,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      // Correctly inject the API KEY without breaking other process.env usages
-      'process.env.API_KEY': JSON.stringify(env.API_KEY),
+      // Correctly inject the API KEY. Using || '' ensures it doesn't crash if undefined.
+      'process.env.API_KEY': JSON.stringify(env.API_KEY || ''),
     },
   };
 });
