@@ -8,10 +8,18 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      // Prevent "process is not defined" error in browser
-      'process.env': {}, 
-      // Correctly inject the API KEY.
+      // Correctly inject the API KEY without breaking other process.env usages
       'process.env.API_KEY': JSON.stringify(env.API_KEY || ''),
+    },
+    server: {
+      proxy: {
+        '/suno-proxy': {
+          target: 'https://suno-api-ejfv.onrender.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/suno-proxy/, ''),
+          secure: false,
+        },
+      },
     },
   };
 });
